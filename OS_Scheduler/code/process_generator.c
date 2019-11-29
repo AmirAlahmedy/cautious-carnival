@@ -1,7 +1,7 @@
 #include "headers.h"
 
 #define MAXCHAR 1000
-int readFile(char *filename, char lines[MAXCHAR][MAXCHAR]);
+int readFile(char *filename, int lines[MAXCHAR][MAXCHAR]);
 void clearResources(int);
 
 struct process
@@ -15,7 +15,8 @@ int main(int argc, char *argv[])
     signal(SIGINT, clearResources);
     // TODO Initialization
     // 1. Read the input files.
-    char lines[MAXCHAR][MAXCHAR], *filename = "processes.txt";
+    int lines[MAXCHAR][MAXCHAR];
+    char  *filename = "processes.txt";
     int num_proc = readFile(filename, lines);
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.
     // 3. Initiate and create the scheduler and clock processes.
@@ -58,10 +59,10 @@ int main(int argc, char *argv[])
             for (int i = 0; i < num_proc; i++)
                 if ((y - x) == lines[i][1])
                 {
-                    p_send.id = (int)(lines[i][0]);
-                    p_send.arrival = (int)(lines[i][1]);
-                    p_send.runtime = (int)(lines[i][2]);
-                    p_send.priority = (int)(lines[i][3]);
+                    p_send.id = lines[i][0];
+                    p_send.arrival = lines[i][1];
+                    p_send.runtime = lines[i][2];
+                    p_send.priority = lines[i][3];
     
                     send_val = msgsnd(msgqid, &p_send, sizeof(struct process), !IPC_NOWAIT);
                     if (send_val == -1)
@@ -86,7 +87,7 @@ void clearResources(int signum)
     //TODO Clears all resources in case of interruption
 }
 
-int readFile(char *filename, char lines[MAXCHAR][MAXCHAR])
+int readFile(char *filename, int lines[MAXCHAR][MAXCHAR])
 {
     FILE *fp;
     char str[MAXCHAR];
@@ -102,11 +103,16 @@ int readFile(char *filename, char lines[MAXCHAR][MAXCHAR])
 
         for (int j = 0, k = 0; str[j] != '\n'; j++)
         {
+            char num[] = "";
             if (str[j] == '\t')
                 continue;
-            lines[l][k] = str[j];
-            k++;
+
+            while (isdigit(str[j]))
+                strncat(num, &str[j++], 1);
+
+            lines[l][k++] = atoi(num);
         }
+
         l++;
     }
     fclose(fp);
