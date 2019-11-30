@@ -1,14 +1,9 @@
 #include "headers.h"
 #include <string.h>
 
-#define MAXCHAR 1000
-int readFile(char *filename, int lines[MAXCHAR][MAXCHAR]);
+int readFile(char *filename, int lines[][COLS]);
 void clearResources(int);
 
-struct process
-{
-    int id, arrival, runtime, priority;
-};
 
 int main(int argc, char *argv[])
 {
@@ -16,10 +11,37 @@ int main(int argc, char *argv[])
     signal(SIGINT, clearResources);
     // TODO Initialization
     // 1. Read the input files.
-    int lines[MAXCHAR][MAXCHAR];
+    int lines[MAXCHAR][COLS];
     char *filename = "processes.txt";
     int num_proc = readFile(filename, lines);
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.
+    int quantum, choice;
+    printf("\nChoose the scheduling algorithm:  \n");
+    printf("1.Round Robin \n");
+    printf("2.SRTN \n");
+    printf("3.Nonpreemptive HPF \n");
+    printf("4.Quit \n\n");
+    printf("Enter your choice : ");
+
+    scanf("%d", &choice);
+    switch (choice)
+    {
+    case 1:
+        printf("\nEnter the quantum : ");
+        scanf("%d", &quantum);
+        break;
+    case 2:
+        /* code */
+        break;
+    case 3:
+        /* code */
+        break;
+    case 4:
+        exit(1);
+        break;
+    default:
+        break;
+    }
     // 3. Initiate and create the scheduler and clock processes.
     pid_t pid = fork();
     if (pid == 0)
@@ -87,7 +109,7 @@ void clearResources(int signum)
     //TODO Clears all resources in case of interruption
 }
 
-int readFile(char *filename, int lines[MAXCHAR][MAXCHAR])
+int readFile(char *filename, int lines[][COLS])
 {
     FILE *fp;
     char str[MAXCHAR];

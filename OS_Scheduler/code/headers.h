@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#pragma once
 
 typedef short bool;
 #define true 1
@@ -17,6 +18,12 @@ typedef short bool;
 
 #define SHKEY 300
 
+#define MAXCHAR 1000
+#define COLS 4
+struct process
+{
+    int id, arrival, runtime, priority;
+};
 
 ///==============================
 //don't mess with this variable//
