@@ -1,4 +1,5 @@
 #include "headers.h"
+#include <string.h>
 
 #define MAXCHAR 1000
 int readFile(char *filename, int lines[MAXCHAR][MAXCHAR]);
@@ -16,7 +17,7 @@ int main(int argc, char *argv[])
     // TODO Initialization
     // 1. Read the input files.
     int lines[MAXCHAR][MAXCHAR];
-    char  *filename = "processes.txt";
+    char *filename = "processes.txt";
     int num_proc = readFile(filename, lines);
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.
     // 3. Initiate and create the scheduler and clock processes.
@@ -63,7 +64,7 @@ int main(int argc, char *argv[])
                     p_send.arrival = lines[i][1];
                     p_send.runtime = lines[i][2];
                     p_send.priority = lines[i][3];
-    
+
                     send_val = msgsnd(msgqid, &p_send, sizeof(struct process), !IPC_NOWAIT);
                     if (send_val == -1)
                         perror("Errror in sending processes");
@@ -73,7 +74,6 @@ int main(int argc, char *argv[])
         }
         msgctl(msgqid, IPC_RMID, (struct msqid_ds *)0);
         destroyClk(true);
-
     }
     else
     {

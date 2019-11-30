@@ -22,10 +22,10 @@ int main(int argc, char *argv[])
         perror("Error in receiving number of processes");
 
     struct process p_send[num_proc];
-    int i = 0;
     while (1)
     {
         rec_val = msgrcv(msgqid, &p_send, sizeof(struct process), 0, !IPC_NOWAIT);
+        //printf("not waiting!\n");
         if (rec_val == -1)
             perror("Error in receiving processes");
     }
@@ -36,8 +36,8 @@ int main(int argc, char *argv[])
     destroyClk(true);
 }
 /* 
-    atoi
-    how to implement our code while in loop it blocks
+    atoi - done 
+    how to implement our code while in loop it blocks - done
     exit
     sending processes
     sending number of proceses or making the size static
