@@ -4,10 +4,10 @@
 int readFile(char *filename, int lines[][COLS]);
 void clearResources(int);
 
+key_t msgqid;
 
 int main(int argc, char *argv[])
 {
-    key_t msgqid;
     signal(SIGINT, clearResources);
     // TODO Initialization
     // 1. Read the input files.
@@ -27,14 +27,8 @@ int main(int argc, char *argv[])
     switch (choice)
     {
     case 1:
-        printf("\nEnter the quantum : ");
+        printf("\nEnter the quantum: ");
         scanf("%d", &quantum);
-        break;
-    case 2:
-        /* code */
-        break;
-    case 3:
-        /* code */
         break;
     case 4:
         exit(1);
@@ -46,6 +40,7 @@ int main(int argc, char *argv[])
     pid_t pid = fork();
     if (pid == 0)
     {
+        //execl("/home/amir/Desktop/Fall 2019/Operatimg Systems/project (phases1 & 2)/project/OS-Phase1_2/OS_Scheduler/code/clk.out", "./clk.out", NULL);
         system("./clk.out");
         puts("child");
     }
@@ -59,20 +54,27 @@ int main(int argc, char *argv[])
         msgqid = msgget(12613, IPC_CREAT | 0644);
         if (msgqid == -1)
         {
-            perror("Error in create");
+            perror("Process Generator: Error in create");
             exit(-1);
         }
-        printf("msgqid = %d\n", msgqid);
 
         // 4. Use this function after creating the clock process to initialize clock
         initClk();
+
+
         // To get time use this
         int x = getClk(), y, send_val;
-        printf("current time is %d\n", x);
+        printf("Process Generator: current time is %d\n", x);
+
         struct process p_send;
 
-        if (msgsnd(msgqid, &num_proc, sizeof(int), !IPC_NOWAIT) == -1)
-            perror("Errror in sending number of processes");
+        struct details d;
+        d.num_proc = num_proc;
+        d.scheduling_algo = choice;
+        d.quantum = quantum;
+
+        if (msgsnd(msgqid, &d, sizeof(d), !IPC_NOWAIT) == -1)
+            perror("Process Generator: Errror in sending details");
 
         // TODO Generation Main Loop
         while (1)
@@ -80,7 +82,7 @@ int main(int argc, char *argv[])
             // 5. Create a data structure for processes and provide it with its parameters.
             y = getClk();
             for (int i = 0; i < num_proc; i++)
-                if ((y - x) == lines[i][1])
+                if (y  == lines[i][1])
                 {
                     p_send.id = lines[i][0];
                     p_send.arrival = lines[i][1];
@@ -89,7 +91,7 @@ int main(int argc, char *argv[])
 
                     send_val = msgsnd(msgqid, &p_send, sizeof(struct process), !IPC_NOWAIT);
                     if (send_val == -1)
-                        perror("Errror in sending processes");
+                        perror("Process Generator: Errror in sending processes");
                 }
             // 6. Send the information to the scheduler at the appropriate time.
             // 7. Clear clock resources
@@ -106,7 +108,8 @@ int main(int argc, char *argv[])
 
 void clearResources(int signum)
 {
-    //TODO Clears all resources in case of interruption
+    // TODO: Clears all resources in case of interruption
+    msgctl(msgqid, IPC_RMID, (struct msqid_ds *)0);
 }
 
 int readFile(char *filename, int lines[][COLS])

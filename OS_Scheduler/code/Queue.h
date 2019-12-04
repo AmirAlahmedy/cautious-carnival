@@ -3,12 +3,6 @@
 #include <stdlib.h>
 #include "headers.h"
 
-struct longProcess
-{
-    struct process *t;
-    char *state;
-    int remain, wait;
-};
 
 // A linked list (LL) node to store a queue entry
 struct QNode

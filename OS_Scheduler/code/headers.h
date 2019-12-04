@@ -1,4 +1,4 @@
-#include <stdio.h>      //if you don't use scanf/printf change this include
+#include <stdio.h> //if you don't use scanf/printf change this include
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/file.h>
@@ -20,23 +20,41 @@ typedef short bool;
 
 #define MAXCHAR 1000
 #define COLS 4
+
+const int OO = 0x3f3f3f3f;
 struct process
 {
     int id, arrival, runtime, priority;
 };
 
+struct longProcess
+{
+    int id, arrival, runtime, priority;
+    char *state;
+    int remain, wait;
+    int arrIndx;
+};
+
+struct details
+{
+    int num_proc, scheduling_algo, quantum;
+};
+
+void remove_from_array(struct longProcess *ptr, int index, int size)
+{
+    for (int c = index - 1; c < size - 1; c++)
+        ptr[c] = ptr[c + 1];
+}
+
 ///==============================
 //don't mess with this variable//
-int * shmaddr;                 //
+int *shmaddr; //
 //===============================
-
-
 
 int getClk()
 {
     return *shmaddr;
 }
-
 
 /*
  * All process call this function at the beginning to establish communication between them and the clock module.
@@ -52,9 +70,8 @@ void initClk()
         sleep(1);
         shmid = shmget(SHKEY, 4, 0444);
     }
-    shmaddr = (int *) shmat(shmid, (void *)0, 0);
+    shmaddr = (int *)shmat(shmid, (void *)0, 0);
 }
-
 
 /*
  * All process call this function at the end to release the communication
