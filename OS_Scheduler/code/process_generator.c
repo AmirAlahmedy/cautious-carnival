@@ -42,11 +42,10 @@ int main(int argc, char *argv[])
     {
         //execl("/home/amir/Desktop/Fall 2019/Operatimg Systems/project (phases1 & 2)/project/OS-Phase1_2/OS_Scheduler/code/clk.out", "./clk.out", NULL);
         system("./clk.out");
-        puts("child");
+
     }
     else if (pid != -1)
     {
-        puts("parent");
 
         if (fork() == 0)
             system("./scheduler.out");
@@ -69,12 +68,18 @@ int main(int argc, char *argv[])
         struct process p_send;
 
         struct details d;
+        d.mtype = 7;
         d.num_proc = num_proc;
         d.scheduling_algo = choice;
         d.quantum = quantum;
 
-        if (msgsnd(msgqid, &d, sizeof(d), !IPC_NOWAIT) == -1)
+        if ((msgsnd(msgqid, &d, sizeof(d), !IPC_NOWAIT)) == -1)
             perror("Process Generator: Errror in sending details");
+
+        bool sent[num_proc];
+        for (int i = 0; i < num_proc; i++)
+            sent[i] = 0;
+        
 
         // TODO Generation Main Loop
         while (1)
@@ -82,14 +87,15 @@ int main(int argc, char *argv[])
             // 5. Create a data structure for processes and provide it with its parameters.
             y = getClk();
             for (int i = 0; i < num_proc; i++)
-                if (y  == lines[i][1])
+                if (y  == lines[i][1] && !sent[i])
                 {
+                    sent[i] = 1;
                     p_send.id = lines[i][0];
                     p_send.arrival = lines[i][1];
                     p_send.runtime = lines[i][2];
                     p_send.priority = lines[i][3];
 
-                    send_val = msgsnd(msgqid, &p_send, sizeof(struct process), !IPC_NOWAIT);
+                    send_val = msgsnd(msgqid, &p_send, sizeof(p_send), !IPC_NOWAIT);
                     if (send_val == -1)
                         perror("Process Generator: Errror in sending processes");
                 }
@@ -110,6 +116,7 @@ void clearResources(int signum)
 {
     // TODO: Clears all resources in case of interruption
     msgctl(msgqid, IPC_RMID, (struct msqid_ds *)0);
+    destroyClk(true);
 }
 
 int readFile(char *filename, int lines[][COLS])

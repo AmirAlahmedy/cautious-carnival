@@ -24,12 +24,14 @@ typedef short bool;
 const int OO = 0x3f3f3f3f;
 struct process
 {
-    int id, arrival, runtime, priority;
+    long int id;
+    int arrival, runtime, priority;
 };
 
 struct longProcess
 {
-    int id, arrival, runtime, priority;
+    long int id;
+    int arrival, runtime, priority;
     char *state;
     int remain, wait;
     int arrIndx;
@@ -37,13 +39,16 @@ struct longProcess
 
 struct details
 {
+    long int mtype;
     int num_proc, scheduling_algo, quantum;
 };
 
-void remove_from_array(struct longProcess *ptr, int index, int size)
+int remove_from_array(struct longProcess *ptr, int index, int size)
 {
     for (int c = index - 1; c < size - 1; c++)
         ptr[c] = ptr[c + 1];
+    size -= 2;
+    return size;
 }
 
 ///==============================

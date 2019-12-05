@@ -11,7 +11,7 @@ int main(int agrc, char *argv[])
     //TODO it needs to get the remaining time from somewhere: from the scheduler
     //remainingtime = ??;
     int msgqid = msgget(12614, IPC_CREAT | 0644);
-    if (msgrcv(msgqid, &rec_proc, sizeof(struct longProcess), rec_proc.id, !IPC_NOWAIT) == -1)
+    if ((msgrcv(msgqid, &rec_proc, sizeof(rec_proc), rec_proc.id, !IPC_NOWAIT)) == -1)
         perror("Process: Error in receiving runtime");
 
     remainingtime = rec_proc.remain;
@@ -20,7 +20,7 @@ int main(int agrc, char *argv[])
         remainingtime--;
         printf("\nprocess no. %d remaining time = %d", rec_proc.id, remainingtime);
     }
-    if (msgsnd(msgqid, &rec_proc.arrIndx, sizeof(int), !IPC_NOWAIT) == -1)
+    if ((msgsnd(msgqid, &(rec_proc.arrIndx), sizeof(rec_proc.arrIndx), !IPC_NOWAIT)) == -1)
         perror("Process: Errror in sending finished process arrIndex to scheduler");
 
     destroyClk(false);
