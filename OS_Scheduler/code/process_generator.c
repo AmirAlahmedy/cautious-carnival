@@ -4,7 +4,7 @@
 int readFile(char *filename, int lines[][COLS]);
 void clearResources(int);
 
-key_t msgqid;
+int msgqid;
 
 int main(int argc, char *argv[])
 {
@@ -37,18 +37,16 @@ int main(int argc, char *argv[])
         break;
     }
     // 3. Initiate and create the scheduler and clock processes.
-    pid_t pid = fork();
+    int pid = fork();
     if (pid == 0)
     {
         //execl("/home/amir/Desktop/Fall 2019/Operatimg Systems/project (phases1 & 2)/project/OS-Phase1_2/OS_Scheduler/code/clk.out", "./clk.out", NULL);
         system("./clk.out");
-
     }
     else if (pid != -1)
     {
-
-        if (fork() == 0)
-            system("./scheduler.out");
+        // 4. Use this function after creating the clock process to initialize clock
+        initClk();
 
         msgqid = msgget(12613, IPC_CREAT | 0644);
         if (msgqid == -1)
@@ -57,9 +55,8 @@ int main(int argc, char *argv[])
             exit(-1);
         }
 
-        // 4. Use this function after creating the clock process to initialize clock
-        initClk();
-
+        if (fork() == 0)
+            system("./scheduler.out");
 
         // To get time use this
         int x = getClk(), y, send_val;
@@ -79,7 +76,6 @@ int main(int argc, char *argv[])
         bool sent[num_proc];
         for (int i = 0; i < num_proc; i++)
             sent[i] = 0;
-        
 
         // TODO Generation Main Loop
         while (1)
@@ -87,7 +83,8 @@ int main(int argc, char *argv[])
             // 5. Create a data structure for processes and provide it with its parameters.
             y = getClk();
             for (int i = 0; i < num_proc; i++)
-                if (y  == lines[i][1] && !sent[i])
+            {
+                if (y == lines[i][1] && !sent[i])
                 {
                     sent[i] = 1;
                     p_send.id = lines[i][0];
@@ -99,10 +96,13 @@ int main(int argc, char *argv[])
                     if (send_val == -1)
                         perror("Process Generator: Errror in sending processes");
                 }
+                
+            }
             // 6. Send the information to the scheduler at the appropriate time.
             // 7. Clear clock resources
         }
-        msgctl(msgqid, IPC_RMID, (struct msqid_ds *)0);
+        puts("allSent");
+        // msgctl(msgqid, IPC_RMID, (struct msqid_ds *)0);
         destroyClk(true);
     }
     else
