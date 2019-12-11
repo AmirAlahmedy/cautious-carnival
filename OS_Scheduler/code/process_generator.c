@@ -3,12 +3,19 @@
 
 int readFile(char *filename, int lines[][COLS]);
 void clearResources(int);
+void sigusr1_handler(int signum)
+{
+    pid_t pid = getpid();
+    printf("%d received SIGUSR1 \n", pid);
+    kill(pid, SIGCONT);
+}
 
-int msgqid;
+int msgqid, scheduler_pid;
 
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
+    signal(SIGUSR1, sigusr1_handler);
     // TODO Initialization
     // 1. Read the input files.
     int lines[MAXCHAR][COLS];
@@ -42,6 +49,7 @@ int main(int argc, char *argv[])
     {
         //execl("/home/amir/Desktop/Fall 2019/Operatimg Systems/project (phases1 & 2)/project/OS-Phase1_2/OS_Scheduler/code/clk.out", "./clk.out", NULL);
         system("./clk.out");
+        exit(0);
     }
     else if (pid != -1)
     {
@@ -56,7 +64,11 @@ int main(int argc, char *argv[])
         }
 
         if (fork() == 0)
+        {
+            scheduler_pid = getpid();
             system("./scheduler.out");
+            exit(0);
+        }
 
         // To get time use this
         int x = getClk(), y, send_val;
@@ -73,9 +85,9 @@ int main(int argc, char *argv[])
         if ((msgsnd(msgqid, &d, sizeof(d), !IPC_NOWAIT)) == -1)
             perror("Process Generator: Errror in sending details");
 
-        bool sent[num_proc];
+        bool sent[num_proc], and[num_proc];
         for (int i = 0; i < num_proc; i++)
-            sent[i] = 0;
+            and[i] = sent[i] = 0;
 
         // TODO Generation Main Loop
         while (1)
@@ -86,18 +98,29 @@ int main(int argc, char *argv[])
             {
                 if (y == lines[i][1] && !sent[i])
                 {
-                    sent[i] = 1;
+                    and[i] = sent[i] = 1;
                     p_send.id = lines[i][0];
                     p_send.arrival = lines[i][1];
-                    p_send.runtime = lines[i][2];
+                    p_send.runtime = p_send.remain = lines[i][2];
                     p_send.priority = lines[i][3];
+                    p_send.state = ARRIVED;
 
                     send_val = msgsnd(msgqid, &p_send, sizeof(p_send), !IPC_NOWAIT);
                     if (send_val == -1)
                         perror("Process Generator: Errror in sending processes");
                 }
-                
             }
+            // for (int i = 1; i < num_proc; i++)
+            //     and[i] = and[i] && and[i - 1];
+            // printf("%d\n", sent[0]);
+            // if (sent[num_proc - 1] == 1)
+            // {
+            //     kill(scheduler_pid, SIGALRM);
+            //     while (1)
+            //     {
+            //         sleep(INT_MAX);
+            //     }
+            // }
             // 6. Send the information to the scheduler at the appropriate time.
             // 7. Clear clock resources
         }

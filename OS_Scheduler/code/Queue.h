@@ -7,7 +7,7 @@
 // A linked list (LL) node to store a queue entry
 struct QNode
 {
-    struct longProcess key;
+    struct process key;
     struct QNode *next;
 };
 
@@ -19,7 +19,7 @@ struct Queue
 };
 
 // A utility function to create a new linked list node.
-struct QNode *newNode(struct longProcess k)
+struct QNode *newNode(struct process k)
 {
     struct QNode *temp = (struct QNode *)malloc(sizeof(struct QNode));
     temp->key = k;
@@ -36,7 +36,7 @@ struct Queue *createQueue()
 }
 
 // The function to add a key k to q
-void enQueue(struct Queue *q, struct longProcess k)
+void enQueue(struct Queue *q, struct process k)
 {
     // Create a new LL node
     struct QNode *temp = newNode(k);
@@ -76,4 +76,6 @@ bool isEmpty(struct Queue *q)
 {
     if (q->front == NULL)
         return true;
+    else
+        return false;
 }
