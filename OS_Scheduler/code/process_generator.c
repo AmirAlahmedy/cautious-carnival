@@ -3,19 +3,14 @@
 
 int readFile(char *filename, int lines[][COLS]);
 void clearResources(int);
-void sigusr1_handler(int signum)
-{
-    pid_t pid = getpid();
-    printf("%d received SIGUSR1 \n", pid);
-    kill(pid, SIGCONT);
-}
 
-int msgqid, scheduler_pid;
+
+int msgqid, scheduler_pid, shmid;
 
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
-    signal(SIGUSR1, sigusr1_handler);
+    // signal(SIGUSR1, sigusr1_handler);
     // TODO Initialization
     // 1. Read the input files.
     int lines[MAXCHAR][COLS];
@@ -63,6 +58,9 @@ int main(int argc, char *argv[])
             exit(-1);
         }
 
+        shmid = shmget(5, sizeof(int), IPC_CREAT | 0644);
+        int *allSent = (int*)shmat(shmid, (void *)0, 0);
+
         if (fork() == 0)
         {
             scheduler_pid = getpid();
@@ -90,6 +88,7 @@ int main(int argc, char *argv[])
             and[i] = sent[i] = 0;
 
         // TODO Generation Main Loop
+        *allSent = 0;
         while (1)
         {
             // 5. Create a data structure for processes and provide it with its parameters.
@@ -106,21 +105,18 @@ int main(int argc, char *argv[])
                     p_send.state = ARRIVED;
 
                     send_val = msgsnd(msgqid, &p_send, sizeof(p_send), !IPC_NOWAIT);
+                    kill(scheduler_pid, SIGCONT);
                     if (send_val == -1)
                         perror("Process Generator: Errror in sending processes");
                 }
             }
-            // for (int i = 1; i < num_proc; i++)
-            //     and[i] = and[i] && and[i - 1];
-            // printf("%d\n", sent[0]);
-            // if (sent[num_proc - 1] == 1)
-            // {
-            //     kill(scheduler_pid, SIGALRM);
-            //     while (1)
-            //     {
-            //         sleep(INT_MAX);
-            //     }
-            // }
+            if(sent[num_proc - 1] == 1)
+            {
+                // sleep(5);
+                *allSent = 1;
+                shmdt(allSent);
+                sleep(INT_MAX);
+            }
             // 6. Send the information to the scheduler at the appropriate time.
             // 7. Clear clock resources
         }
@@ -139,6 +135,7 @@ void clearResources(int signum)
 {
     // TODO: Clears all resources in case of interruption
     msgctl(msgqid, IPC_RMID, (struct msqid_ds *)0);
+    shmctl(shmid, IPC_RMID, (struct shmid_ds *)0);
     destroyClk(true);
 }
 

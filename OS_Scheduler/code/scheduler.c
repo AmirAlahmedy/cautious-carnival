@@ -1,6 +1,7 @@
 #include "headers.h"
 #include "Queue.h"
-
+#include "priority_queue.h"
+int *allSent;
 // void handler(int signum);
 void sigalarm_handler(int signum)
 {
@@ -58,12 +59,11 @@ void roundRobin(struct Queue *Q, key_t msgqid, FILE *fp, int Quantum)
 
         printf("prev pid: %d, curr pid: %d\n", pid[num - 1], pid[num]);
 
-
         kill(Q->front->key.pid, SIGCONT);
         if (Q->front->key.state == STOPPED)
         {
             Q->front->key.state = RESUMED;
-            Q->front->key.wait = getClk() - ((Q->front->key.runtime - Q->front->key.runtime) + Q->front->key.arrival);
+            Q->front->key.wait = getClk() - ((Q->front->key.runtime - Q->front->key.remain) + Q->front->key.arrival);
             fp = fopen("scheduler.log", "a");
             fprintf(fp, "#At time\t%d\tprocess\t%ld\tresumed\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n", getClk(), Q->front->key.id, Q->front->key.arrival, Q->front->key.runtime, Q->front->key.remain, Q->front->key.wait);
             fclose(fp);
@@ -117,150 +117,306 @@ void roundRobin(struct Queue *Q, key_t msgqid, FILE *fp, int Quantum)
         else
         {
             temp = Q->front->key;
-            discarded = (deQueue(Q))->key; 
+            discarded = (deQueue(Q))->key;
         }
     }
 }
-
-int i = -1, prev_finish, max_i;
-float WTA_HPF = 0.0;
-bool first = true, ProcRunning = false;
+/* used in HPF and SRTN */
+int len;
+Node *PQ;
+bool noProcRunning = 1;
 void HPF(key_t msgqid, FILE *fp)
 {
-    int pid, msgqid2, msgqid3;
-
-    struct process p_rec = {.id = OO, /*.arrival = 0, .runtime = 0, .priority =  0*/};
-    struct longProcess p_long, p_longarr[MAXCHAR];
-    int maxPrior = OO;
-
-    msgqid2 = msgget(12614, IPC_CREAT | 0644);
-    msgqid3 = msgget(12615, IPC_CREAT | 0644);
-
-    int isProcessRec = OO;
-
-    if (msgrcv(msgqid, &p_rec, sizeof(p_rec), 0, IPC_NOWAIT) == -1)
-        ;
-    // perror("Scheduler(HPF): Error in receiving processes");
-
-    isProcessRec = p_rec.id;
-    // printf("pid rec: %d\n", isProcessRec);
-    if (first)
+    struct process p_rec = {.state = UNDEFINED};
+    int ch_pid, stat_loc;
+    if (!(*allSent))
+        msgrcv(msgqid, &p_rec, sizeof(p_rec), 0, !IPC_NOWAIT);
+    if (p_rec.state == ARRIVED)
     {
-        first = false;
-        // printf("\n(%d)\n", isProcessRec);
-        prev_finish = p_rec.arrival;
-        // printf("first finish is %d\n", prev_finish);
+        num++;
+        push(&PQ, p_rec, p_rec.priority);
+        printf("peek is %ld\n", peek(&PQ).id);
+        len++;
+        printf("num: %d, len: %d\n", num, len);
     }
 
-    if (isProcessRec != OO)
+    if (len)
     {
-        printf("%ld %d %d %d\n", p_rec.id, p_rec.arrival, p_rec.runtime, p_rec.priority);
-        p_long.id = p_rec.id;
-        p_long.arrival = p_rec.arrival;
-        p_long.priority = p_rec.priority;
-        p_long.remain = p_long.runtime = p_rec.runtime;
-        p_long.state = "arrived";
-        p_long.wait = 0;
+        printf("at %d: rec is %ld %d %d %d\n", getClk(), p_rec.id, p_rec.arrival, p_rec.runtime, p_rec.priority);
+        printf("at %d: PQ front is %ld %d %d %d\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.priority);
 
-        i++; // i += countarr
-        p_longarr[i] = p_long;
-        max_i = i;
-        for (int j = 1; j <= i; j++)
+        if (PQ->data.state == ARRIVED && noProcRunning)
         {
-            p_longarr[j].arrIndx = j;
-            if ((maxPrior > p_longarr[j].priority) /* && (p_longarr[j].remain == p_longarr[j].runtime) */)
+            noProcRunning = 0;
+            pid[num] = fork();
+            if (pid[num] == 0)
             {
-                maxPrior = p_longarr[j].priority;
-                max_i = j;
+                PQ->data.pid = pid[num];
+                char line[20];
+                sprintf(line, "./process.out %d", PQ->data.runtime);
+                system(line);
+                exit(7);
             }
-        }
-        p_longarr[max_i].state = "started";
-        p_longarr[max_i].wait = getClk() - p_longarr[max_i].arrival;
 
-        int started_time;
-        if (/* (getClk() == prev_finish && getClk() >= p_longarr[max_i].arrival) || (getClk() == p_longarr[max_i].arrival && p_longarr[max_i].arrival >= prev_finish) && */ !ProcRunning)
-        {
-            started_time = getClk();
+            PQ->data.ST = getClk();
+            PQ->data.wait = PQ->data.ST - PQ->data.arrival;
+            PQ->data.state = STARTED;
             fp = fopen("scheduler.log", "a");
-            fprintf(fp, "#At time\t%d\tprocess\t%ld\t%s\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n", started_time, p_longarr[max_i].id, p_longarr[max_i].state, p_longarr[max_i].arrival, p_longarr[max_i].runtime, p_longarr[max_i].remain, p_longarr[max_i].wait);
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tstarted\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.remain, PQ->data.wait);
             fclose(fp);
-            ProcRunning = true;
-            printf("process %ld sent at %d\n", p_longarr[max_i].id, getClk());
-            if ((msgsnd(msgqid2, &p_longarr[max_i], sizeof(p_longarr[max_i]), !IPC_NOWAIT)) == -1)
-                perror("Scheduler(HPF): Error in sending runtime to the process");
         }
-    }
 
-    struct longProcess finished_process;
-    if (i != -1 && ProcRunning)
-    {
-        // printf("%ld %d %d %d\n", p_longarr[max_i].id, p_longarr[max_i].arrival, p_longarr[max_i].runtime, p_longarr[max_i].priority);
-        // printf("%ld %d %d %d\n", p_longarr[1].id, p_longarr[1].arrival, p_longarr[1].runtime, p_longarr[1].priority);
+        printf("prev pid: %d, curr pid: %d\n", pid[num - 1], pid[num]);
 
-        switch (fork())
+        int option = *allSent ? (1) : (1 | WNOHANG);
+        printf("allsent is %d\n", *allSent);
+        ch_pid = waitpid(pid[num], &stat_loc, option);
+        printf("Ch_pid is %d\n", ch_pid);
+        if (ch_pid != 0 && !(stat_loc & 0x00FF))
         {
-        case 0:
-            system("./process.out");
-            break;
-        case -1:
-            // perror("Scheduler(HPF): Error in fork");
-            break;
-        default:
+            noProcRunning = 1;
+            printf("\nA child with pid %d terminated with exit code %d\n", ch_pid, stat_loc >> 8);
+            PQ->data.remain = 0;
 
-            // if (/* ((getClk() == prev_finish && getClk() >= p_longarr[max_i].arrival) || (getClk() == p_longarr[max_i].arrival && p_longarr[max_i].arrival >= prev_finish) &&  */ !ProcRunning /* ) */)
-            // {
-            //     ProcRunning = true;
-            //     printf("process %ld sent at %d\n", p_longarr[max_i].id, getClk());
-            //     if ((msgsnd(msgqid2, &p_longarr[max_i], sizeof(p_longarr[max_i]), !IPC_NOWAIT)) == -1)
-            //         perror("Scheduler(HPF): Error in sending runtime to the process");
-            // }
+            PQ->data.state = FINISHED;
+            int TA = getClk() - PQ->data.ST;
+            PQ->data.wait = TA - PQ->data.runtime;
+            float WTA = 0;
+            if (PQ->data.runtime != 0)
+                WTA = TA / PQ->data.runtime;
+            fp = fopen("scheduler.log", "a");
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tfinished\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\tTA\t%d\tWTA\t%.2f\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.remain, PQ->data.wait, TA, WTA);
+            fclose(fp);
 
-            if ((msgrcv(msgqid3, &finished_process, sizeof(finished_process), 0, IPC_NOWAIT)) == -1)
-                ; // perror("Scheduler(HPF): Error in receiving finished process");
-
-            if (finished_process.id != 0 /* && ProcRunning */)
-            {
-                int TA = finished_process.finished - finished_process.arrival;
-                WTA_HPF = (WTA_HPF * (i) + TA) / (i + 1);
-                printf("Finished process %ld, its remain is %d\n", finished_process.id, finished_process.remain);
-                finished_process.state = "finished";
-
-                printf("arrIndx %d\n", finished_process.arrIndx);
-                printf("max_i %d\n", max_i);
-                p_longarr[max_i].priority = OO;
-
-                // printf(fp, finished_process.state);
-
-                printf("#At time\t%d\tprocess\t%ld\t%s\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\tTA\t%d\tWTA\t%.2f\n", finished_process.finished, finished_process.id, finished_process.state, finished_process.arrival, finished_process.runtime, finished_process.remain, finished_process.wait, TA, WTA_HPF);
-                printf("\n(Scheduler) process %ld finished at %d, and its index is %d\n", finished_process.id, finished_process.finished, finished_process.arrIndx);
-
-                prev_finish = finished_process.finished;
-                ProcRunning = false;
-
-                fp = fopen("scheduler.log", "a");
-                fprintf(fp, "#At time\t%d\tprocess\t%ld\t%s\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\tTA\t%d\tWTA\t%.2f\n", finished_process.finished, finished_process.id, finished_process.state, finished_process.arrival, finished_process.runtime, finished_process.remain, finished_process.wait, TA, WTA_HPF);
-                fclose(fp);
-
-                remove_from_array(p_longarr, finished_process.arrIndx, i + 1);
-                i--;
-            }
-
-            break;
+            printf("at %d: process popped is %ld %d %d %d\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.priority);
+            pop(&PQ);
+            len--;
         }
     }
-    // msgctl(msgqid2, IPC_RMID, (struct msqid_ds *)0);
-    // msgctl(msgqid3, IPC_RMID, (struct msqid_ds *)0);
 }
-
-void SRTN(key_t msgqid)
+void SJF(key_t msgqid, FILE *fp)
 {
-    struct process p_rec, proc_arr[MAXCHAR];
+    struct process p_rec = {.state = UNDEFINED};
+    int ch_pid, stat_loc;
+
+    // if (!(*allSent))
     msgrcv(msgqid, &p_rec, sizeof(p_rec), 0, !IPC_NOWAIT);
 
-    if (fork() == 0)
-        system("process.out");
-    while (1)
+    if (p_rec.state == ARRIVED)
+    {
+        num++;
+        push(&PQ, p_rec, p_rec.remain);
+        printf("peek is %ld\n", peek(&PQ).id);
+        len++;
+        printf("num: %d, len: %d\n", num, len);
+    }
+
+    if (len)
+    {
+        printf("at %d: rec is %ld %d %d %d\n", getClk(), p_rec.id, p_rec.arrival, p_rec.runtime, p_rec.priority);
+        printf("at %d: PQ front is %ld %d %d %d\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.priority);
+
+        if (PQ->next->data.state == RESUMED || PQ->next->data.state == STARTED)
+        {
+            kill(pid[num - 1], SIGSTOP); // stop the running process
+            if (PQ->next->data.state = STARTED)
+                PQ->next->data.remain = PQ->next->data.runtime - (getClk() - PQ->next->data.ST);
+            // else if(PQ->data.state = RESUMED)
+            //     PQ->data.remain =
+            PQ->next->data.state = STOPPED;
+            fp = fopen("scheduler.log", "a");
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tstopped\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n", getClk(), PQ->next->data.id, PQ->next->data.arrival, PQ->next->data.runtime, PQ->next->data.remain, PQ->next->data.wait);
+            fclose(fp);
+        }
+
+        pid[num] = fork();
+        if (pid[num] == 0)
+        {
+            PQ->data.pid = pid[num];
+            char line[20];
+            sprintf(line, "./process.out %d", PQ->data.runtime);
+            system(line);
+            exit(7);
+        }
+
+        if (PQ->data.state == ARRIVED)
+        {
+            PQ->data.ST = getClk();
+            PQ->data.wait = PQ->data.ST - PQ->data.arrival;
+            PQ->data.state = STARTED;
+            fp = fopen("scheduler.log", "a");
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tstarted\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.remain, PQ->data.wait);
+            fclose(fp);
+        }
+
+        printf("prev pid: %d, curr pid: %d\n\n", pid[num - 1], pid[num]);
+
+        if (PQ->data.state == STOPPED)
+        {
+            kill(PQ->data.pid, SIGCONT);
+            PQ->data.state = RESUMED;
+            PQ->data.wait = getClk() - ((PQ->data.runtime - PQ->data.remain) + PQ->data.arrival);
+            fp = fopen("scheduler.log", "a");
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tresumed\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.remain, PQ->data.wait);
+            fclose(fp);
+        }
+
+        // alarm(5);
+        ch_pid = waitpid(PQ->data.pid, &stat_loc, 0);
+        if (ch_pid != 0 && !(stat_loc & 0x00FF))
+        {
+            printf("\nA child with pid %d terminated with exit code %d\n", ch_pid, stat_loc >> 8);
+            PQ->data.remain = 0;
+
+            PQ->data.state = FINISHED;
+            int TA = getClk() - PQ->data.ST;
+            PQ->data.wait = TA - PQ->data.runtime;
+            float WTA = 0;
+            if (PQ->data.runtime != 0)
+                WTA = TA / PQ->data.runtime;
+            fp = fopen("scheduler.log", "a");
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tfinished\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\tTA\t%d\tWTA\t%.2f\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.remain, PQ->data.wait, TA, WTA);
+            fclose(fp);
+            printf("at %d: process popped is %ld %d %d %d\n\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.priority);
+            pop(&PQ);
+            len--;
+        }
+    }
+}
+
+/**
+ * The type sig_atomic_t is used in C99 to guarantee
+ * that a variable can be accessed/modified in an atomic way
+ * in the case an interruption (reception of a signal for example) happens.
+ */
+static volatile sig_atomic_t done_waiting = 0;
+
+static void sigusr_handler(int signum)
+{
+    if (signum == SIGCONT)
+    {
+     
+        printf("Signal caught, a process is being receeived\n");
+        done_waiting = 1;
+    }
+    else if (signum == SIGUSR2)
+    {
+        printf("Signal caught, Child terminated\n");
+        done_waiting = 1;
+    }
+}
+
+
+
+void my_pause()
+{
+    /**
+   *  In ISO C, the signal system call is used
+   *  to call a specific handler when a specified
+   *  signal is received by the current process.
+   *  In POSIX.1, it is encouraged to use the sigaction APIs.
+   **/
+    signal(SIGCONT, sigusr_handler);
+    signal(SIGUSR2, sigusr_handler);
+    done_waiting = 0;
+    while (!done_waiting)
+    {
         sleep(INT_MAX);
+    }
+}
+
+void SRTN(key_t msgqid, FILE *fp)
+{
+    struct process p_rec = {.state = UNDEFINED};
+    int ch_pid, stat_loc;
+
+    // if (!(*allSent))
+    // int rcvop = *allSent ? !IPC_NOWAIT : IPC_NOWAIT;
+    msgrcv(msgqid, &p_rec, sizeof(p_rec), 0, !IPC_NOWAIT);
+
+    if (p_rec.state == ARRIVED)
+    {
+        num++;
+        push(&PQ, p_rec, p_rec.remain);
+        printf("peek is %ld\n", peek(&PQ).id);
+        len++;
+        printf("num: %d, len: %d\n", num, len);
+    }
+
+    if (len)
+    {
+        printf("at %d: rec is %ld %d %d %d\n", getClk(), p_rec.id, p_rec.arrival, p_rec.runtime, p_rec.priority);
+        printf("at %d: PQ front is %ld %d %d %d\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.priority);
+        printf("at %d: PQ front next is %ld %d %d %d\n", getClk(), PQ->next->data.id, PQ->next->data.arrival, PQ->next->data.runtime, PQ->next->data.priority);
+
+        if (PQ->next->data.state == RESUMED || PQ->next->data.state == STARTED)
+        {
+            kill(pid[num - 1], SIGSTOP); // stop the running process
+            if (PQ->next->data.state = STARTED)
+                PQ->next->data.remain = PQ->next->data.runtime - (getClk() - PQ->next->data.ST);
+            // else if(PQ->data.state = RESUMED)
+            //     PQ->data.remain =
+            PQ->next->data.state = STOPPED;
+            fp = fopen("scheduler.log", "a");
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tstopped\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n", getClk(), PQ->next->data.id, PQ->next->data.arrival, PQ->next->data.runtime, PQ->next->data.remain, PQ->next->data.wait);
+            fclose(fp);
+        }
+
+        pid[num] = fork();
+        if (pid[num] == 0)
+        {
+            PQ->data.pid = pid[num];
+            char line[20];
+            sprintf(line, "./process.out %d", PQ->data.runtime);
+            system(line);
+            kill(getppid(), SIGUSR2);
+            exit(7);
+        }
+
+        if (PQ->data.state == ARRIVED)
+        {
+            PQ->data.ST = getClk();
+            PQ->data.wait = PQ->data.ST - PQ->data.arrival;
+            PQ->data.state = STARTED;
+            fp = fopen("scheduler.log", "a");
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tstarted\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.remain, PQ->data.wait);
+            fclose(fp);
+        }
+
+        printf("prev pid: %d, curr pid: %d\n\n", pid[num - 1], pid[num]);
+
+        if (PQ->data.state == STOPPED)
+        {
+            kill(PQ->data.pid, SIGCONT);
+            PQ->data.state = RESUMED;
+            PQ->data.wait = getClk() - ((PQ->data.runtime - PQ->data.remain) + PQ->data.arrival);
+            fp = fopen("scheduler.log", "a");
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tresumed\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.remain, PQ->data.wait);
+            fclose(fp);
+        }
+
+        // int options = *allSent ? 0 : 1 | WNOHANG;
+        my_pause();
+        ch_pid = waitpid(PQ->data.pid, &stat_loc, 0 | WNOHANG);
+        if (ch_pid != 0 && !(stat_loc & 0x00FF))
+        {
+            printf("\nA child with pid %d terminated with exit code %d\n", ch_pid, stat_loc >> 8);
+            PQ->data.remain = 0;
+
+            PQ->data.state = FINISHED;
+            int TA = getClk() - PQ->data.ST;
+            PQ->data.wait = TA - PQ->data.runtime;
+            float WTA = 0;
+            if (PQ->data.runtime != 0)
+                WTA = TA / PQ->data.runtime;
+            fp = fopen("scheduler.log", "a");
+            fprintf(fp, "#At time\t%d\tprocess\t%ld\tfinished\tarr\t%d\ttotal\t%d\tremain\t%d\twait\t%d\tTA\t%d\tWTA\t%.2f\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.remain, PQ->data.wait, TA, WTA);
+            fclose(fp);
+            printf("at %d: process popped is %ld %d %d %d\n\n", getClk(), PQ->data.id, PQ->data.arrival, PQ->data.runtime, PQ->data.priority);
+            pop(&PQ);
+            len--;
+        }
+    }
 }
 
 int main(int argc, char *argv[])
@@ -290,6 +446,11 @@ int main(int argc, char *argv[])
     fclose(fp);
 
     struct Queue *Q = createQueue();
+    struct process dummy = {.state = UNDEFINED}; // used in RR
+    PQ = NewNode(dummy, INT_MAX);                // used in SRTN
+    int shmid = shmget(5, sizeof(int), IPC_CREAT | 0644);
+    allSent = (int *)shmat(shmid, (void *)0, 0);
+
     switch (d.scheduling_algo)
     {
     case 1:
@@ -301,7 +462,7 @@ int main(int argc, char *argv[])
     case 2:
         /* SRTN */
         while (1)
-            SRTN(msgqid);
+            SRTN(msgqid, fp);
         break;
 
     case 3:
@@ -314,6 +475,7 @@ int main(int argc, char *argv[])
         break;
     }
 
+    shmdt(allSent);
     //TODO implement the scheduler :)
     //upon termination release the clock resources
 }
