@@ -13,6 +13,7 @@
 #include <ctype.h>
 #include <time.h>
 #include <limits.h>
+#include <math.h>
 #pragma once
 
 typedef short bool;
@@ -22,7 +23,7 @@ typedef short bool;
 #define SHKEY 300
 
 #define MAXCHAR 1000
-#define COLS 4
+#define COLS 5
 
 const int OO = 0x3f3f3f3f;
 enum STATE
@@ -42,15 +43,8 @@ struct process
     int remain, wait;
     int TA, WTA, ST;
     pid_t pid; // the real one
-};
-
-struct longProcess // useless
-{
-    long int id;
-    int arrival, runtime, priority;
-    char *state;
-    int remain, wait, finished;
-    int arrIndx;
+    int memsize;
+    int index;
 };
 
 struct details // useles, will be removed
@@ -58,16 +52,6 @@ struct details // useles, will be removed
     long int mtype;
     int num_proc, scheduling_algo, quantum;
 };
-
-void remove_from_array(struct longProcess *ptr, int index, int size) // useless, will be removed
-{
-    if (index == 0)
-        ptr[0] = ptr[1];
-
-    if (index != 0)
-        for (int c = index - 1; c < size - 1; c++)
-            ptr[c] = ptr[c + 1];
-}
 
 ///==============================
 //don't mess with this variable//

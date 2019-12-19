@@ -16,6 +16,7 @@ int main(int argc, char *argv[])
     int lines[MAXCHAR][COLS];
     char *filename = "processes.txt";
     int num_proc = readFile(filename, lines);
+    // printf("memo %d\n", lines[0][4]);
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.
     int quantum, choice;
     printf("\nChoose the scheduling algorithm:  \n");
@@ -102,6 +103,8 @@ int main(int argc, char *argv[])
                     p_send.arrival = lines[i][1];
                     p_send.runtime = p_send.remain = lines[i][2];
                     p_send.priority = lines[i][3];
+                    p_send.memsize = lines[i][4];
+                    p_send.index = -1;
                     p_send.state = ARRIVED;
 
                     send_val = msgsnd(msgqid, &p_send, sizeof(p_send), !IPC_NOWAIT);
@@ -134,9 +137,11 @@ int main(int argc, char *argv[])
 void clearResources(int signum)
 {
     // TODO: Clears all resources in case of interruption
+    kill(scheduler_pid, SIGINT);
     msgctl(msgqid, IPC_RMID, (struct msqid_ds *)0);
     shmctl(shmid, IPC_RMID, (struct shmid_ds *)0);
     destroyClk(true);
+    kill(getpid(), SIGKILL);
 }
 
 int readFile(char *filename, int lines[][COLS])
